@@ -203,8 +203,7 @@ if __name__ == '__main__':
             if upload_options["file"] is None or not os.path.exists(upload_options["file"]):
                 print "'%s' is not a valid file" % upload_options["file"]
             else:
-                print "WILL UPLOAD " + path
-                # initialize_upload(upload_options)
+                initialize_upload(upload_options)
 
 
 
