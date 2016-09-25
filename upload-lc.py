@@ -1,23 +1,21 @@
 #!/usr/bin/python
 
-# testing git commit
-
+import argparse
 import httplib
-import httplib2
+import json
+import ntpath
 import os
 import random
 import sys
 import time
-import ntpath
 
+import httplib2
 from apiclient.discovery import build
 from apiclient.errors import HttpError
 from apiclient.http import MediaFileUpload
-from oauth2client.file import Storage
 from oauth2client.client import flow_from_clientsecrets
+from oauth2client.file import Storage
 from oauth2client.tools import run
-from optparse import OptionParser
-
 
 # Explicitly tell the underlying HTTP transport library not to retry, since
 # we are handling retry logic ourselves.
@@ -28,9 +26,9 @@ MAX_RETRIES = 10
 
 # Always retry when these exceptions are raised.
 RETRIABLE_EXCEPTIONS = (httplib2.HttpLib2Error, IOError, httplib.NotConnected,
-  httplib.IncompleteRead, httplib.ImproperConnectionState,
-  httplib.CannotSendRequest, httplib.CannotSendHeader,
-  httplib.ResponseNotReady, httplib.BadStatusLine)
+                        httplib.IncompleteRead, httplib.ImproperConnectionState,
+                        httplib.CannotSendRequest, httplib.CannotSendHeader,
+                        httplib.ResponseNotReady, httplib.BadStatusLine)
 
 # Always retry when an apiclient.errors.HttpError with one of these status
 # codes is raised.
@@ -70,92 +68,125 @@ https://developers.google.com/api-client-library/python/guide/aaa_client_secrets
 """ % os.path.abspath(os.path.join(os.path.dirname(__file__),
                                    CLIENT_SECRETS_FILE))
 
+
 def get_authenticated_service():
-  flow = flow_from_clientsecrets(CLIENT_SECRETS_FILE, scope=YOUTUBE_UPLOAD_SCOPE,
-    message=MISSING_CLIENT_SECRETS_MESSAGE)
+    flow = flow_from_clientsecrets(CLIENT_SECRETS_FILE, scope=YOUTUBE_UPLOAD_SCOPE,
+                                   message=MISSING_CLIENT_SECRETS_MESSAGE)
 
-  storage = Storage("%s-oauth2.json" % sys.argv[0])
-  credentials = storage.get()
+    storage = Storage("%s-oauth2.json" % sys.argv[0])
+    credentials = storage.get()
 
-  if credentials is None or credentials.invalid:
-    credentials = run(flow, storage)
+    if credentials is None or credentials.invalid:
+        credentials = run(flow, storage)
 
-  return build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,
-    http=credentials.authorize(httplib2.Http()))
+    return build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,
+                 http=credentials.authorize(httplib2.Http()))
 
 
 def initialize_upload(options):
-  youtube = get_authenticated_service()
+    youtube = get_authenticated_service()
 
-  tags = None
-  if options["keywords"]:
-    tags = options["keywords"].split(",")
+    tags = None
+    if options["keywords"]:
+        tags = options["keywords"].split(",")
 
-  insert_request = youtube.videos().insert(
-    part="snippet,status",
-    body=dict(
-      snippet=dict(
-        title=options["title"],
-        description=options["description"],
-        tags=tags,
-        categoryId=options["category"]
-      ),
-      status=dict(
-        privacyStatus=options["privacyStatus"]
-      )
-    ),
-    # chunksize=-1 means that the entire file will be uploaded in a single
-    # HTTP request. (If the upload fails, it will still be retried where it
-    # left off.) This is usually a best practice, but if you're using Python
-    # older than 2.6 or if you're running on App Engine, you should set the
-    # chunksize to something like 1024 * 1024 (1 megabyte).
-    media_body=MediaFileUpload(options["file"], chunksize=-1, resumable=True)
-  )
+    insert_request = youtube.videos().insert(
+        part="snippet,status",
+        body=dict(
+            snippet=dict(
+                title=options["title"],
+                description=options["description"],
+                tags=tags,
+                categoryId=options["category"]
+            ),
+            status=dict(
+                privacyStatus=options["privacyStatus"]
+            )
+        ),
+        # chunksize=-1 means that the entire file will be uploaded in a single
+        # HTTP request. (If the upload fails, it will still be retried where it
+        # left off.) This is usually a best practice, but if you're using Python
+        # older than 2.6 or if you're running on App Engine, you should set the
+        # chunksize to something like 1024 * 1024 (1 megabyte).
+        media_body=MediaFileUpload(options["file"], chunksize=-1, resumable=True)
+    )
 
-  resumable_upload(insert_request)
+    resumable_upload(insert_request)
 
 
 def resumable_upload(insert_request):
-  response = None
-  error = None
-  retry = 0
-  while response is None:
-    try:
-      print "Uploading file '%s'..." % options["title"]
-      status, response = insert_request.next_chunk()
-      if 'id' in response:
-        print "'%s' (video id: %s) was successfully uploaded." % (
-          options["title"], response['id'])
-      else:
-        exit("The upload failed with an unexpected response: %s" % response)
-    except HttpError, e:
-      if e.resp.status in RETRIABLE_STATUS_CODES:
-        error = "A retriable HTTP error %d occurred:\n%s" % (e.resp.status,
-                                                             e.content)
-      else:
-        raise
-    except RETRIABLE_EXCEPTIONS, e:
-      error = "A retriable error occurred: %s" % e
+    response = None
+    error = None
+    retry = 0
+    while response is None:
+        try:
+            print "Uploading file '%s'..." % options["title"]
+            status, response = insert_request.next_chunk()
+            if 'id' in response:
+                print "'%s' (video id: %s) was successfully uploaded." % (
+                    options["title"], response['id'])
+            else:
+                exit("The upload failed with an unexpected response: %s" % response)
+        except HttpError, e:
+            if e.resp.status in RETRIABLE_STATUS_CODES:
+                error = "A retriable HTTP error %d occurred:\n%s" % (e.resp.status,
+                                                                     e.content)
+            else:
+                raise
+        except RETRIABLE_EXCEPTIONS, e:
+            error = "A retriable error occurred: %s" % e
 
-    if error is not None:
-      print error
-      retry += 1
-      if retry > MAX_RETRIES:
-        exit("No longer attempting to retry.")
+        if error is not None:
+            print error
+            retry += 1
+            if retry > MAX_RETRIES:
+                exit("No longer attempting to retry.")
 
-      max_sleep = 2 ** retry
-      sleep_seconds = random.random() * max_sleep
-      print "Sleeping %f seconds and then retrying..." % sleep_seconds
-      time.sleep(sleep_seconds)
+            max_sleep = 2 ** retry
+            sleep_seconds = random.random() * max_sleep
+            print "Sleeping %f seconds and then retrying..." % sleep_seconds
+            time.sleep(sleep_seconds)
 
 
 if __name__ == '__main__':
-  with open(sys.argv[1]) as f:
-    for line_number, line in enumerate (f, 1):
-      filename = line.strip()
-      create_time = time.ctime(os.path.getmtime(filename))
-      options = {"file":filename, "title":ntpath.basename(filename) + " - " + create_time, "description":"Last modified on: " + create_time, "category":22, "keywords":"test","privacyStatus":"private"} 
-      if options["file"] is None or not os.path.exists(options["file"]):
-    	print "'%s' is not a valid file" % options["file"]
-      else:
-    	initialize_upload(options)
+
+    parser = argparse.ArgumentParser(description='Upload video to YouTube.')
+    parser.add_argument('uploadlist')
+    parser.add_argument("-c", "--config", help="JSON configuration file to override defaults.")
+    args = parser.parse_args()
+
+    if args.config is not None:
+        with open(args.config) as config_file:
+            conf = json.load(config_file)
+    else:
+        # default config file
+        with open('configuration.json') as config_file:
+            conf = json.load(config_file)
+    print(conf["sourcedir"])
+    print(conf["targetdir"])
+
+    filelist = os.listdir(conf["sourcedir"])
+
+    for video in filelist:
+        file = conf["sourcedir"] + video
+        filename = file.strip()
+        create_time = time.ctime(os.path.getmtime(filename))
+        options = {"file": filename, "title": ntpath.basename(filename) + " - " + create_time,
+                   "description": "Last modified on: " + create_time, "category": 22, "keywords": "test",
+                   "privacyStatus": "private"}
+        if options["file"] is None or not os.path.exists(options["file"]):
+            print "'%s' is not a valid file" % options["file"]
+        else:
+            initialize_upload(options)
+
+    # with open(args.uploadlist) as f:
+    #     for line_number, line in enumerate(f, 1):
+    #         filename = line.strip()
+    #         create_time = time.ctime(os.path.getmtime(filename))
+    #         options = {"file": filename, "title": ntpath.basename(filename) + " - " + create_time,
+    #                    "description": "Last modified on: " + create_time, "category": 22, "keywords": "test",
+    #                    "privacyStatus": "private"}
+    #         if options["file"] is None or not os.path.exists(options["file"]):
+    #             print "'%s' is not a valid file" % options["file"]
+    #         else:
+    #             initialize_upload(options)
