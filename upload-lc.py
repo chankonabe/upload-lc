@@ -189,7 +189,7 @@ if __name__ == '__main__':
 
             # query YouTube search API to check if the filename being uploaded already exists in my channel
             if check_for_duplicate(search_options):
-                print fname + " is a duplicate, skipping!"
+                print path_plus_fname + " is a duplicate, skipping!"
                 continue
             comparison_filename = fname.strip().lower()
 
