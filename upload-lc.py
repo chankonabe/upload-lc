@@ -45,9 +45,7 @@ RETRIABLE_STATUS_CODES = [500, 502, 503, 504]
 # Please ensure that you have enabled the YouTube Data API for your project.
 CLIENT_SECRETS_FILE = "client_secrets.json"
 
-# A limited OAuth 2 access scope that allows for uploading files, but not other
-# types of account access.
-YOUTUBE_UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload"
+YOUTUBE_SCOPES = "https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.upload"
 YOUTUBE_API_SERVICE_NAME = "youtube"
 YOUTUBE_API_VERSION = "v3"
 
@@ -70,7 +68,7 @@ https://developers.google.com/api-client-library/python/guide/aaa_client_secrets
 
 
 def get_authenticated_service():
-    flow = flow_from_clientsecrets(CLIENT_SECRETS_FILE, scope=YOUTUBE_UPLOAD_SCOPE,
+    flow = flow_from_clientsecrets(CLIENT_SECRETS_FILE, scope=YOUTUBE_SCOPES,
                                    message=MISSING_CLIENT_SECRETS_MESSAGE)
 
     storage = Storage("%s-oauth2.json" % sys.argv[0])
@@ -82,6 +80,22 @@ def get_authenticated_service():
     return build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,
                  http=credentials.authorize(httplib2.Http()))
 
+def check_for_duplicate(options):
+    youtube = get_authenticated_service()
+
+    # Call the search.list method to see if video match comes up
+    search_result = youtube.search().list(
+        q=options["q"],
+        part="id,snippet",
+        forMine="true",
+        type="video",
+        maxResults=1
+    ).execute()
+
+    if search_result["pageInfo"]["totalResults"] == 0:
+        return False
+
+    return True
 
 def initialize_upload(options):
     youtube = get_authenticated_service()
@@ -120,11 +134,11 @@ def resumable_upload(insert_request):
     retry = 0
     while response is None:
         try:
-            print "Uploading file '%s'..." % options["title"]
+            print "Uploading file '%s'..." % upload_options["title"]
             status, response = insert_request.next_chunk()
             if 'id' in response:
                 print "'%s' (video id: %s) was successfully uploaded." % (
-                    options["title"], response['id'])
+                    upload_options["title"], response['id'])
             else:
                 exit("The upload failed with an unexpected response: %s" % response)
         except HttpError, e:
@@ -151,33 +165,48 @@ def resumable_upload(insert_request):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Upload video to YouTube.')
-    parser.add_argument('uploadlist')
-    parser.add_argument("-c", "--config", help="JSON configuration file to override defaults.")
+    parser.add_argument("-c", "--config", help="JSON configuration file to override defaults.", default="configuration.json")
     args = parser.parse_args()
 
-    if args.config is not None:
-        with open(args.config) as config_file:
-            conf = json.load(config_file)
-    else:
-        # default config file
-        with open('configuration.json') as config_file:
-            conf = json.load(config_file)
-    print(conf["sourcedir"])
-    print(conf["targetdir"])
+    with open(args.config) as config_file:
+       conf = json.load(config_file)
+    print("Target Directory: " + conf["targetdir"])
 
-    filelist = os.listdir(conf["sourcedir"])
+    for i in range(2):
+        sourcepath = conf["sourcedirs"][i]
 
-    for video in filelist:
-        file = conf["sourcedir"] + video
-        filename = file.strip()
-        create_time = time.ctime(os.path.getmtime(filename))
-        options = {"file": filename, "title": ntpath.basename(filename) + " - " + create_time,
-                   "description": "Last modified on: " + create_time, "category": 22, "keywords": "test",
-                   "privacyStatus": "private"}
-        if options["file"] is None or not os.path.exists(options["file"]):
-            print "'%s' is not a valid file" % options["file"]
-        else:
-            initialize_upload(options)
+        print("Source Directory:" + sourcepath)
+
+        filelist = sorted(os.listdir(sourcepath))
+
+        for fname in filelist:
+
+            path = os.path.join(sourcepath, fname)
+            if os.path.isdir(path):
+                # skip directories
+                continue
+            search_options = {"q": fname}
+
+            # query YouTube search API to check if the filename being uploaded already exists in my channel
+            if check_for_duplicate(search_options):
+                print fname + " is a duplicate, skipping!"
+                continue
+            filename = fname.strip().lower()
+
+            # make sure only MOVs or MP4s are uploaded
+            if filename.startswith('.') or not filename.endswith(('.mov', '.mp4')):
+                continue
+            create_time = time.ctime(os.path.getmtime(filename))
+            upload_options = {"file": filename, "title": ntpath.basename(filename) + " - " + create_time,
+                       "description": "Last modified on: " + create_time, "category": 22, "keywords": "upload-lc",
+                       "privacyStatus": "private"}
+            if upload_options["file"] is None or not os.path.exists(upload_options["file"]):
+                print "'%s' is not a valid file" % upload_options["file"]
+            else:
+                print "WILL UPLOAD " + path
+                # initialize_upload(upload_options)
+
+
 
     # with open(args.uploadlist) as f:
     #     for line_number, line in enumerate(f, 1):
