@@ -170,7 +170,16 @@ if __name__ == '__main__':
 
     with open(args.config) as config_file:
        conf = json.load(config_file)
-    print("Target Directory: " + conf["targetdir"])
+
+    try:
+        # open logfile to read previous attempted uploads and write new ones
+        with open(conf["logfile"], 'r') as f:
+            #TODO fix this, not ideal as assumes no duplicates in different directories
+            previous_files = [ntpath.basename(line.strip()) for line in f]
+    except IOError:
+        previous_files = []
+
+    logfile = open(conf["logfile"], 'a')
 
     for i in range(2):
         sourcepath = conf["sourcedirs"][i]
@@ -179,13 +188,19 @@ if __name__ == '__main__':
 
         filelist = sorted(os.listdir(sourcepath))
 
-        for fname in filelist:
+        # remove files from filelist that already exist in logfile
+        newfilelist = [x for x in filelist if x not in previous_files]
+
+        for fname in newfilelist:
 
             path_plus_fname = os.path.join(sourcepath, fname).strip()
             if os.path.isdir(path_plus_fname):
                 # skip directories
                 continue
             search_options = {"q": fname}
+
+            # write files from this path to directory, so we don't attempt search query on them next time
+            logfile.write(path_plus_fname + '\n')
 
             # query YouTube search API to check if the filename being uploaded already exists in my channel
             if check_for_duplicate(search_options):
@@ -205,7 +220,7 @@ if __name__ == '__main__':
             else:
                 initialize_upload(upload_options)
 
-
+    logfile.close()
 
     # with open(args.uploadlist) as f:
     #     for line_number, line in enumerate(f, 1):
