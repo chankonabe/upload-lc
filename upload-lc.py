@@ -181,8 +181,8 @@ if __name__ == '__main__':
 
         for fname in filelist:
 
-            path = os.path.join(sourcepath, fname)
-            if os.path.isdir(path):
+            path_plus_fname = os.path.join(sourcepath, fname).strip()
+            if os.path.isdir(path_plus_fname):
                 # skip directories
                 continue
             search_options = {"q": fname}
@@ -191,13 +191,13 @@ if __name__ == '__main__':
             if check_for_duplicate(search_options):
                 print fname + " is a duplicate, skipping!"
                 continue
-            filename = fname.strip().lower()
+            comparison_filename = fname.strip().lower()
 
             # make sure only MOVs or MP4s are uploaded
-            if filename.startswith('.') or not filename.endswith(('.mov', '.mp4')):
+            if comparison_filename.startswith('.') or not comparison_filename.endswith(('.mov', '.mp4')):
                 continue
-            create_time = time.ctime(os.path.getmtime(filename))
-            upload_options = {"file": filename, "title": ntpath.basename(filename) + " - " + create_time,
+            create_time = time.ctime(os.path.getmtime(path_plus_fname))
+            upload_options = {"file": path_plus_fname, "title": ntpath.basename(path_plus_fname) + " - " + create_time,
                        "description": "Last modified on: " + create_time, "category": 22, "keywords": "upload-lc",
                        "privacyStatus": "private"}
             if upload_options["file"] is None or not os.path.exists(upload_options["file"]):
