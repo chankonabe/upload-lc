@@ -174,8 +174,7 @@ if __name__ == '__main__':
     try:
         # open logfile to read previous attempted uploads and write new ones
         with open(conf["logfile"], 'r') as f:
-            #TODO fix this, not ideal as assumes no duplicates in different directories
-            previous_files = [ntpath.basename(line.strip()) for line in f]
+            previous_files = [line.strip() for line in f]
     except IOError:
         previous_files = []
 
@@ -186,10 +185,12 @@ if __name__ == '__main__':
 
         print("Source Directory:" + sourcepath)
 
+        # prepend source directory to list of filenames from current source dir
         filelist = sorted(os.listdir(sourcepath))
+        pathfilelist = [sourcepath + str(i) for i in filelist]
 
-        # remove files from filelist that already exist in logfile
-        newfilelist = [x for x in filelist if x not in previous_files]
+        # filter out files that already exist in logfile
+        newfilelist = [x for x in pathfilelist if x not in previous_files]
 
         for fname in newfilelist:
 
