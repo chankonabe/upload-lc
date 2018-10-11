@@ -174,6 +174,13 @@ def resumable_upload(insert_request):
             time.sleep(sleep_seconds)
 
 
+def step(ext, dirname, names):
+
+    for name in names:
+        if name.lower().endswith(ext):
+            pathfilelist.append(os.path.join(dirname, name))
+
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Upload video to YouTube.')
@@ -193,37 +200,42 @@ if __name__ == '__main__':
 
     logfile = open(conf["logfile"], 'a')
 
-    for i in range(2):  # this range should really be dynamically based on number of elements in JSON list "sourcedirs"
+    exten = ('.mov', '.mp4')
+    pathfilelist = []
+
+    for i in range(1):  # this range should really be dynamically based on number of elements in JSON list "sourcedirs"
         sourcepath = conf["sourcedirs"][i]
 
         print("Source Directory:" + sourcepath)
 
         # prepend source directory to list of filenames from current source dir
-        filelist = sorted(os.listdir(sourcepath))
-        pathfilelist = [sourcepath + str(i) for i in filelist]
+        os.path.walk(sourcepath, step, exten)
 
+        #pathfilelist = [sourcepath + str(i) for i in filelist]
+        #print pathfilelist
         # filter out files that already exist in logfile
         newfilelist = [x for x in pathfilelist if x not in previous_files]
+        #print '[%s]' % ', '.join(map(str, newfilelist))
 
-        for fname in newfilelist:
+        for absolutepath in newfilelist:
 
-            path_plus_fname = os.path.join(sourcepath, fname).strip()
-            if os.path.isdir(path_plus_fname):
+            fname = os.path.basename(absolutepath)
+            if os.path.isdir(absolutepath):
                 # skip directories
                 continue
             search_options = {"q": fname}
 
             # query YouTube search API to check if the filename being uploaded already exists in my channel
             if check_for_duplicate(search_options):
-                print path_plus_fname + " is a duplicate, skipping!"
+                print absolutepath + " is a duplicate, skipping!"
                 continue
             comparison_filename = fname.strip().lower()
 
             # make sure only MOVs or MP4s are uploaded
             if comparison_filename.startswith('.') or not comparison_filename.endswith(('.mov', '.mp4')):
                 continue
-            create_time = time.ctime(os.path.getmtime(path_plus_fname))
-            upload_options = {"file": path_plus_fname, "title": ntpath.basename(path_plus_fname) + " - " + create_time,
+            create_time = time.ctime(os.path.getmtime(absolutepath))
+            upload_options = {"file": absolutepath, "title": ntpath.basename(absolutepath) + " - " + create_time,
                               "description": "Last modified on: " + create_time, "category": 22,
                               "keywords": "upload-lc",
                               "privacyStatus": "private"}
@@ -233,7 +245,7 @@ if __name__ == '__main__':
                 initialize_upload(upload_options)
 
             # write files from this path to directory after successful upload, so we don't attempt search query on them next time
-            logfile.write(path_plus_fname + '\n')
+            logfile.write(absolutepath + '\n')
 
     logfile.close()
 
