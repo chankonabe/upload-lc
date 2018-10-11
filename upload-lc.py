@@ -90,6 +90,7 @@ def get_authenticated_service():
     return build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,
                  http=credentials.authorize(httplib2.Http()))
 
+
 def check_for_duplicate(options):
     youtube = get_authenticated_service()
 
@@ -106,6 +107,7 @@ def check_for_duplicate(options):
         return False
 
     return True
+
 
 def initialize_upload(options):
     youtube = get_authenticated_service()
@@ -175,11 +177,12 @@ def resumable_upload(insert_request):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Upload video to YouTube.')
-    parser.add_argument("-c", "--config", help="JSON configuration file to override defaults.", default="configuration.json")
+    parser.add_argument("-c", "--config", help="JSON configuration file to override defaults.",
+                        default="configuration.json")
     args = parser.parse_args()
 
     with open(args.config) as config_file:
-       conf = json.load(config_file)
+        conf = json.load(config_file)
 
     try:
         # open logfile to read previous attempted uploads and write new ones
@@ -190,7 +193,7 @@ if __name__ == '__main__':
 
     logfile = open(conf["logfile"], 'a')
 
-    for i in range(2): # this range should really be dynamically based on number of elements in JSON list "sourcedirs"
+    for i in range(2):  # this range should really be dynamically based on number of elements in JSON list "sourcedirs"
         sourcepath = conf["sourcedirs"][i]
 
         print("Source Directory:" + sourcepath)
@@ -210,9 +213,6 @@ if __name__ == '__main__':
                 continue
             search_options = {"q": fname}
 
-            # write files from this path to directory, so we don't attempt search query on them next time
-            logfile.write(path_plus_fname + '\n')
-
             # query YouTube search API to check if the filename being uploaded already exists in my channel
             if check_for_duplicate(search_options):
                 print path_plus_fname + " is a duplicate, skipping!"
@@ -224,12 +224,16 @@ if __name__ == '__main__':
                 continue
             create_time = time.ctime(os.path.getmtime(path_plus_fname))
             upload_options = {"file": path_plus_fname, "title": ntpath.basename(path_plus_fname) + " - " + create_time,
-                       "description": "Last modified on: " + create_time, "category": 22, "keywords": "upload-lc",
-                       "privacyStatus": "private"}
+                              "description": "Last modified on: " + create_time, "category": 22,
+                              "keywords": "upload-lc",
+                              "privacyStatus": "private"}
             if upload_options["file"] is None or not os.path.exists(upload_options["file"]):
                 print "'%s' is not a valid file" % upload_options["file"]
             else:
                 initialize_upload(upload_options)
+
+            # write files from this path to directory after successful upload, so we don't attempt search query on them next time
+            logfile.write(path_plus_fname + '\n')
 
     logfile.close()
 
