@@ -228,6 +228,8 @@ if __name__ == '__main__':
             # query YouTube search API to check if the filename being uploaded already exists in my channel
             if check_for_duplicate(search_options):
                 print absolutepath + " is a duplicate, skipping!"
+                # write to log file to ensure we don't try to upload on next script runk
+                logfile.write(absolutepath + '\n')
                 continue
             comparison_filename = fname.strip().lower()
 
