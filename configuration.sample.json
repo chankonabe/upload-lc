@@ -1,0 +1,4 @@
+{
+  "logfile": "upload.log",
+  "sourcedirs": ["/first/directory/", "/second/directory/"]
+}
