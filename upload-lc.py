@@ -15,7 +15,16 @@ from apiclient.errors import HttpError
 from apiclient.http import MediaFileUpload
 from oauth2client.client import flow_from_clientsecrets
 from oauth2client.file import Storage
-from oauth2client.tools import run
+from oauth2client import tools
+
+###
+# TWO REQUIRED FILES for this script to work
+# client_secrets.json (format from Google)
+# and
+# configuration.json, which has attributes "logfile", a path+filename string to an upload log
+# and "sourcedirs", a list of directories to upload from (the script has not been modified
+# to take a dynamic length list of dirs, that should be one of the next fixes/updates
+###k
 
 # Explicitly tell the underlying HTTP transport library not to retry, since
 # we are handling retry logic ourselves.
@@ -75,7 +84,8 @@ def get_authenticated_service():
     credentials = storage.get()
 
     if credentials is None or credentials.invalid:
-        credentials = run(flow, storage)
+        flags = tools.argparser.parse_args(args=[])
+        credentials = tools.run_flow(flow, storage, flags)
 
     return build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,
                  http=credentials.authorize(httplib2.Http()))
@@ -180,7 +190,7 @@ if __name__ == '__main__':
 
     logfile = open(conf["logfile"], 'a')
 
-    for i in range(2):
+    for i in range(2): # this range should really be dynamically based on number of elements in JSON list "sourcedirs"
         sourcepath = conf["sourcedirs"][i]
 
         print("Source Directory:" + sourcepath)
