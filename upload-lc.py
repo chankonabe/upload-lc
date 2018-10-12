@@ -203,19 +203,16 @@ if __name__ == '__main__':
     exten = ('.mov', '.mp4')
     pathfilelist = []
 
-    for i in range(1):  # this range should really be dynamically based on number of elements in JSON list "sourcedirs"
+    for i in range(len(conf["sourcedirs"])):
         sourcepath = conf["sourcedirs"][i]
 
         print("Source Directory:" + sourcepath)
 
-        # prepend source directory to list of filenames from current source dir
+        # recursively traverse the current source directory and add to pathfilelist
         os.path.walk(sourcepath, step, exten)
 
-        #pathfilelist = [sourcepath + str(i) for i in filelist]
-        #print pathfilelist
         # filter out files that already exist in logfile
         newfilelist = [x for x in pathfilelist if x not in previous_files]
-        #print '[%s]' % ', '.join(map(str, newfilelist))
 
         for absolutepath in newfilelist:
 
